@@ -22,6 +22,7 @@ from dust3r.utils.image import load_images, rgb
 from dust3r.utils.device import to_numpy
 from dust3r.viz import add_scene_cam, CAM_COLORS, OPENGL, pts3d_to_trimesh, cat_meshes
 from dust3r.cloud_opt import global_aligner, GlobalAlignerMode
+from dust3r.export_data import export_optimized_scene
 
 import matplotlib.pyplot as pl
 pl.ion()
@@ -109,6 +110,10 @@ def get_3D_model_from_scene(outdir, scene, min_conf_thr=3, as_pointcloud=False, 
     pts3d = to_numpy(scene.get_pts3d())
     scene.min_conf_thr = float(scene.conf_trf(torch.tensor(min_conf_thr)))
     msk = to_numpy(scene.get_masks())
+
+    # Export scene to file
+    export_optimized_scene(outdir, rgbimg, pts3d,msk,focals, cams2world)
+
     return _convert_scene_output_to_glb(outdir, rgbimg, pts3d, msk, focals, cams2world, as_pointcloud=as_pointcloud,
                                         transparent_cams=transparent_cams, cam_size=cam_size)
 
