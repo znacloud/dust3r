@@ -113,7 +113,7 @@ def get_3D_model_from_scene(outdir, scene, min_conf_thr=3, as_pointcloud=False, 
     confs = to_numpy(scene.get_conf())
 
     # Export scene to file
-    export_optimized_scene(outdir, rgbimg, pts3d,confs,focals, cams2world)
+    export_optimized_scene(outdir, rgbimg, pts3d, confs, focals, cams2world)
 
     return _convert_scene_output_to_glb(outdir, rgbimg, pts3d, msk, focals, cams2world, as_pointcloud=as_pointcloud,
                                         transparent_cams=transparent_cams, cam_size=cam_size)
