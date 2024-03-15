@@ -12,9 +12,10 @@ from dust3r.utils.device import to_numpy
 from pathlib import Path
 import numpy as np
 import PIL
+import json
 
 
-def export_optimized_scene(outdir, imgs, pts3d, mask, focals, cams2world):
+def export_optimized_scene(outdir, imgs, pts3d, confs, focals, cams2world):
     """
     Export the point clouds along with its optimized intrinsic and extrinsic datasets.
 
@@ -30,7 +31,8 @@ def export_optimized_scene(outdir, imgs, pts3d, mask, focals, cams2world):
         -- conf_points3D.txt
 
     """
-    pts3d = to_numpy(pts3d)
+    # pts3d = to_numpy(pts3d) # already be numpy format
+    # confs = to_numpy(confs) # already be numpy format
     imgs = to_numpy(imgs)
     focals = to_numpy(focals)
     cams2world = to_numpy(cams2world)
@@ -38,13 +40,29 @@ def export_optimized_scene(outdir, imgs, pts3d, mask, focals, cams2world):
     scene_dir = Path(outdir) / "DUSt3R_Scene"
     scene_dir.mkdir(parents=True, exist_ok=True)
 
-    # Export images to files
-    _export_imgs(scene_dir, imgs)
+    # >>> pts3d.shape=(4, 512, 288, 3), imgs.shape=(4, 512, 288, 3)
+    # >>> focals.shape=(4, 1), pose.shape=(4, 4, 4)
+    print(f">>> confs.shape={np.shape(confs)}")
+
+    # Export images & intrinsics & extrinsic to files
+    _export_camera_infos(scene_dir, imgs, confs, focals, pose=cams2world)
+
+    # Export PointsCloud
+    _export_pointscloud(scene_dir, pts3d, imgs, confs)
 
 
-def _export_imgs(scene_dir: Path, imgs):
+def _export_camera_infos(scene_dir: Path, imgs, masks, focals, poses):
+
+    assert len(focals) == len(imgs) == len(poses), "data dimention mismatch!"
+
     ref_imgs_dir = scene_dir / "ref_imgs"
     ref_imgs_dir.mkdir(parents=True, exist_ok=True)
+
+    intr_file = scene_dir / "camera_intrinsics.json"
+    intr_obj = {}
+
+    extr_file = scene_dir / "camera_extrinsics.json"
+    extr_obj = {}
 
     for i in range(len(imgs)):
         image = imgs[i]
@@ -53,5 +71,64 @@ def _export_imgs(scene_dir: Path, imgs):
         if image.dtype != np.uint8:
             image = np.uint8(255 * image)
 
+        idx = f"{i:03}"
+        image_name = f"img_{idx}.jpg"
+
+        # Save images
         image = PIL.Image.fromarray(image)
-        image.save(ref_imgs_dir / f"img_{i:03}.jpg")
+        image.save(ref_imgs_dir / image_name)
+
+        # Save intrinsic
+        focal = focals[i]
+        intr_obj[idx] = dict(
+            id=idx,
+            model="PINHOLE",
+            width=W,
+            height=H,
+            focal_x=focal,
+            focal_y=focal,
+            pp_x=0,
+            pp_y=0,
+        )
+        with open(intr_file, "w") as f:
+            json.dump(intr_obj, f)
+
+        # Save extrinsic
+        pose = poses[i]
+        R = pose[:3, :3]
+        T = pose[:3, 3:4]
+
+        # Test
+        print(f"{R=},{T=}")
+        print(f"rflat={R.flatten()},tvect={T.flatten()}")
+        # Test end
+
+        extr_obj[idx] = dict(
+            id=idx,
+            camera_id=idx,
+            img_name=image_name,
+            rflat=R.flatten(),
+            tvec=T.flatten(),
+        )
+        with open(extr_file, "w") as f:
+            json.dump(extr_obj, f)
+
+
+def _export_pointscloud(scene_dir, pts3d, imgs, confs):
+    assert len(pts3d) == len(imgs) == len(confs), "data dimention mismatch!"
+
+    pts3d_file = scene_dir / "conf_points3D.txt"
+
+    with open(pts3d_file, "w") as f:
+        for i in range(len(imgs)):
+            image_name = f"img_{i:03}.jpg"
+            f.writelines([f"# ref_img: {image_name}"])
+
+            img_pts = pts3d[i]  # HxWx3
+            img_col = imgs[i]  # HxWx3
+            pts_cols = np.stack(
+                (img_pts.reshape(-1, 3), img_col.reshape(-1, 3)), axis=-1
+            )
+            # Join the strings within each row
+            string_array = [",".join(map(str, row)) for row in pts_cols]
+            f.writelines(string_array)
