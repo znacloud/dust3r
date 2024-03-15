@@ -14,6 +14,18 @@ import numpy as np
 import PIL
 import json
 
+class NumpyEncoder(json.JSONEncoder):
+    """ Special json encoder for numpy types """
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+
 
 def export_optimized_scene(outdir, imgs, pts3d, confs, focals, cams2world):
     """
@@ -42,16 +54,17 @@ def export_optimized_scene(outdir, imgs, pts3d, confs, focals, cams2world):
 
     # >>> pts3d.shape=(4, 512, 288, 3), imgs.shape=(4, 512, 288, 3)
     # >>> focals.shape=(4, 1), pose.shape=(4, 4, 4)
-    print(f">>> confs.shape={np.shape(confs)}")
+    # print(f">>> confs.shape={np.shape(confs)}")
+    # >>> confs.shape=(4, 512, 288)
 
     # Export images & intrinsics & extrinsic to files
-    _export_camera_infos(scene_dir, imgs, confs, focals, pose=cams2world)
+    _export_camera_infos(scene_dir, imgs, focals, poses=cams2world)
 
     # Export PointsCloud
     _export_pointscloud(scene_dir, pts3d, imgs, confs)
 
 
-def _export_camera_infos(scene_dir: Path, imgs, masks, focals, poses):
+def _export_camera_infos(scene_dir: Path, imgs, focals, poses):
 
     assert len(focals) == len(imgs) == len(poses), "data dimention mismatch!"
 
@@ -91,7 +104,7 @@ def _export_camera_infos(scene_dir: Path, imgs, masks, focals, poses):
             pp_y=0,
         )
         with open(intr_file, "w") as f:
-            json.dump(intr_obj, f)
+            json.dump(intr_obj, f, cls=NumpyEncoder, indent=4, sort_keys=True)
 
         # Save extrinsic
         pose = poses[i]
@@ -111,7 +124,7 @@ def _export_camera_infos(scene_dir: Path, imgs, masks, focals, poses):
             tvec=T.flatten(),
         )
         with open(extr_file, "w") as f:
-            json.dump(extr_obj, f)
+            json.dump(extr_obj, f, cls=NumpyEncoder, indent=4, sort_keys=True)
 
 
 def _export_pointscloud(scene_dir, pts3d, imgs, confs):
@@ -122,13 +135,14 @@ def _export_pointscloud(scene_dir, pts3d, imgs, confs):
     with open(pts3d_file, "w") as f:
         for i in range(len(imgs)):
             image_name = f"img_{i:03}.jpg"
-            f.writelines([f"# ref_img: {image_name}"])
+            f.writelines([f"# ref_img: {image_name}\n"])
 
             img_pts = pts3d[i]  # HxWx3
             img_col = imgs[i]  # HxWx3
-            pts_cols = np.stack(
-                (img_pts.reshape(-1, 3), img_col.reshape(-1, 3)), axis=-1
+            conf = confs[i] # HxW
+            pts_cols = np.concatenate(
+                (img_pts.reshape(-1, 3), img_col.reshape(-1, 3), conf.reshape(-1,1)), axis=-1
             )
             # Join the strings within each row
-            string_array = [",".join(map(str, row)) for row in pts_cols]
+            string_array = [",".join(map(str, row))+"\n" for row in pts_cols]
             f.writelines(string_array)
