@@ -112,8 +112,8 @@ def _export_camera_infos(scene_dir: Path, imgs, focals, poses):
         T = pose[:3, 3:4]
 
         # Test
-        print(f"{R=},{T=}")
-        print(f"rflat={R.flatten()},tvect={T.flatten()}")
+        # print(f"{R=},{T=}")
+        # print(f"rflat={R.flatten()},tvect={T.flatten()}")
         # Test end
 
         extr_obj[idx] = dict(
