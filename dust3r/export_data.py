@@ -115,9 +115,9 @@ def _export_camera_infos(scene_dir: Path, imgs, focals, poses):
             json.dump(intr_obj, f, cls=NumpyEncoder, indent=2)
 
         # Save extrinsic
-        pose = poses[i] @ OPENGL  # Transformed to OPENGL format
+        pose = poses[i]
         R = pose[:3, :3]
-        T = pose[:3, 3:4]
+        T = pose[:3, 3]
 
         # Test
         # print(f"{R=},{T=}")
