@@ -155,9 +155,9 @@ def _export_pointscloud(scene_dir, pts3d, imgs, confs, masks):
             pts_cols = np.concatenate(
                 (
                     img_pts.reshape(-1, 3),
-                    img_col.reshape(-1, 3),
+                    img_col.reshape(-1, 3).astype(int),
                     conf.reshape(-1, 1),
-                    msk.reshape(-1, 1),
+                    msk.reshape(-1, 1).astype(int),
                 ),
                 axis=-1,
             )
