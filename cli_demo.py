@@ -51,18 +51,8 @@ def get_args_parser():
     return parser
 
 
-def _convert_scene_output_to_glb(
-    outdir,
-    imgs,
-    pts3d,
-    mask,
-    focals,
-    cams2world,
-    cam_size=0.05,
-    cam_color=None,
-    as_pointcloud=False,
-    transparent_cams=False,
-):
+def _convert_scene_output_to_glb(outdir, imgs, pts3d, mask, focals, cams2world, cam_size=0.05,
+                                 cam_color=None, as_pointcloud=False, transparent_cams=False):
     assert len(pts3d) == len(mask) <= len(imgs) <= len(cams2world) == len(focals)
     pts3d = to_numpy(pts3d)
     imgs = to_numpy(imgs)
@@ -90,35 +80,21 @@ def _convert_scene_output_to_glb(
             camera_edge_color = cam_color[i]
         else:
             camera_edge_color = cam_color or CAM_COLORS[i % len(CAM_COLORS)]
-        add_scene_cam(
-            scene,
-            pose_c2w,
-            camera_edge_color,
-            None if transparent_cams else imgs[i],
-            focals[i],
-            imsize=imgs[i].shape[1::-1],
-            screen_width=cam_size,
-        )
+        add_scene_cam(scene, pose_c2w, camera_edge_color,
+                      None if transparent_cams else imgs[i], focals[i],
+                      imsize=imgs[i].shape[1::-1], screen_width=cam_size)
 
     rot = np.eye(4)
-    rot[:3, :3] = Rotation.from_euler("y", np.deg2rad(180)).as_matrix()
+    rot[:3, :3] = Rotation.from_euler('y', np.deg2rad(180)).as_matrix()
     scene.apply_transform(np.linalg.inv(cams2world[0] @ OPENGL @ rot))
-    outfile = os.path.join(outdir, "scene.glb")
-    print("(exporting 3D scene to", outfile, ")")
+    outfile = os.path.join(outdir, 'scene.glb')
+    print('(exporting 3D scene to', outfile, ')')
     scene.export(file_obj=outfile)
     return outfile
 
 
-def get_3D_model_from_scene(
-    outdir,
-    scene,
-    min_conf_thr=3,
-    as_pointcloud=False,
-    mask_sky=False,
-    clean_depth=False,
-    transparent_cams=False,
-    cam_size=0.05,
-):
+def get_3D_model_from_scene(outdir, scene, min_conf_thr=3, as_pointcloud=False, mask_sky=False,
+                            clean_depth=False, transparent_cams=False, cam_size=0.05):
     """
     extract 3D_model (glb file) from a reconstructed scene
     """
@@ -138,41 +114,18 @@ def get_3D_model_from_scene(
     pts3d = to_numpy(scene.get_pts3d())
     scene.min_conf_thr = float(scene.conf_trf(torch.tensor(min_conf_thr)))
     msk = to_numpy(scene.get_masks())
+    confs = to_numpy(scene.get_conf(mode="id"))
 
     # Export scene to file
-    export_optimized_scene(outdir, rgbimg, pts3d, msk, focals, cams2world)
+    export_optimized_scene(outdir, rgbimg, pts3d, confs, msk, focals, cams2world)
 
-    return _convert_scene_output_to_glb(
-        outdir,
-        rgbimg,
-        pts3d,
-        msk,
-        focals,
-        cams2world,
-        as_pointcloud=as_pointcloud,
-        transparent_cams=transparent_cams,
-        cam_size=cam_size,
-    )
+    return _convert_scene_output_to_glb(outdir, rgbimg, pts3d, msk, focals, cams2world, as_pointcloud=as_pointcloud,
+                                        transparent_cams=transparent_cams, cam_size=cam_size)
 
 
-def get_reconstructed_scene(
-    outdir,
-    model,
-    device,
-    image_size,
-    filelist,
-    schedule,
-    niter,
-    min_conf_thr,
-    as_pointcloud,
-    mask_sky,
-    clean_depth,
-    transparent_cams,
-    cam_size,
-    scenegraph_type,
-    winsize,
-    refid,
-):
+def get_reconstructed_scene(outdir, model, device, image_size, filelist, schedule, niter, min_conf_thr,
+                            as_pointcloud, mask_sky, clean_depth, transparent_cams, cam_size,
+                            scenegraph_type, winsize, refid):
     """
     from a list of images, run dust3r inference, global aligner.
     then run get_3D_model_from_scene
@@ -180,40 +133,24 @@ def get_reconstructed_scene(
     imgs = load_images(filelist, size=image_size)
     if len(imgs) == 1:
         imgs = [imgs[0], copy.deepcopy(imgs[0])]
-        imgs[1]["idx"] = 1
+        imgs[1]['idx'] = 1
     if scenegraph_type == "swin":
         scenegraph_type = scenegraph_type + "-" + str(winsize)
     elif scenegraph_type == "oneref":
         scenegraph_type = scenegraph_type + "-" + str(refid)
 
-    pairs = make_pairs(
-        imgs, scene_graph=scenegraph_type, prefilter=None, symmetrize=True
-    )
+    pairs = make_pairs(imgs, scene_graph=scenegraph_type, prefilter=None, symmetrize=True)
     output = inference(pairs, model, device, batch_size=batch_size)
 
-    mode = (
-        GlobalAlignerMode.PointCloudOptimizer
-        if len(imgs) > 2
-        else GlobalAlignerMode.PairViewer
-    )
+    mode = GlobalAlignerMode.PointCloudOptimizer if len(imgs) > 2 else GlobalAlignerMode.PairViewer
     scene = global_aligner(output, device=device, mode=mode)
     lr = 0.01
 
     if mode == GlobalAlignerMode.PointCloudOptimizer:
-        loss = scene.compute_global_alignment(
-            init="mst", niter=niter, schedule=schedule, lr=lr
-        )
+        loss = scene.compute_global_alignment(init='mst', niter=niter, schedule=schedule, lr=lr)
 
-    outfile = get_3D_model_from_scene(
-        outdir,
-        scene,
-        min_conf_thr,
-        as_pointcloud,
-        mask_sky,
-        clean_depth,
-        transparent_cams,
-        cam_size,
-    )
+    outfile = get_3D_model_from_scene(outdir, scene, min_conf_thr, as_pointcloud, mask_sky,
+                                      clean_depth, transparent_cams, cam_size)
 
     # also return rgb, depth and confidence imgs
     # depth is normalized with the max value for all images
@@ -221,11 +158,11 @@ def get_reconstructed_scene(
     rgbimg = scene.imgs
     depths = to_numpy(scene.get_depthmaps())
     confs = to_numpy([c for c in scene.im_conf])
-    cmap = pl.get_cmap("jet")
+    cmap = pl.get_cmap('jet')
     depths_max = max([d.max() for d in depths])
-    depths = [d / depths_max for d in depths]
+    depths = [d/depths_max for d in depths]
     confs_max = max([d.max() for d in confs])
-    confs = [cmap(d / confs_max) for d in confs]
+    confs = [cmap(d/confs_max) for d in confs]
 
     imgs = []
     for i in range(len(rgbimg)):
@@ -250,7 +187,7 @@ def main_demo(tmpdirname, model, device, image_size, filelist):
         False,
         True,
         False,
-        0.3,
+        0.05,
         "complete",
         1,
         0,

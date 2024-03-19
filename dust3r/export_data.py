@@ -9,6 +9,7 @@
 #
 
 from dust3r.utils.device import to_numpy
+from dust3r.viz import OPENGL
 from pathlib import Path
 import numpy as np
 import PIL
@@ -19,7 +20,7 @@ class NumpyEncoder(json.JSONEncoder):
     """Special json encoder for numpy types"""
 
     def default(self, obj):
-        if isinstance(obj, np.integer) or isinstance(obj, np.uint8):
+        if isinstance(obj, (np.integer, np.uint8)):
             return int(obj)
         elif isinstance(obj, np.floating):
             return float(obj)
@@ -28,7 +29,7 @@ class NumpyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def export_optimized_scene(outdir, imgs, pts3d, confs, focals, cams2world):
+def export_optimized_scene(outdir, imgs, pts3d, confs, masks, focals, cams2world):
     """
     Export the point clouds along with its optimized intrinsic and extrinsic datasets.
 
@@ -46,6 +47,7 @@ def export_optimized_scene(outdir, imgs, pts3d, confs, focals, cams2world):
     """
     # pts3d = to_numpy(pts3d) # already be numpy format
     # confs = to_numpy(confs) # already be numpy format
+    # masks = to_numpy(masks) # already be numpy format
     imgs = to_numpy(imgs)
     focals = to_numpy(focals)
     cams2world = to_numpy(cams2world)
@@ -62,7 +64,7 @@ def export_optimized_scene(outdir, imgs, pts3d, confs, focals, cams2world):
     _export_camera_infos(scene_dir, imgs, focals, poses=cams2world)
 
     # Export PointsCloud
-    _export_pointscloud(scene_dir, pts3d, imgs, confs)
+    _export_pointscloud(scene_dir, pts3d, imgs, confs, masks)
 
 
 def _export_camera_infos(scene_dir: Path, imgs, focals, poses):
@@ -113,7 +115,7 @@ def _export_camera_infos(scene_dir: Path, imgs, focals, poses):
             json.dump(intr_obj, f, cls=NumpyEncoder, indent=2)
 
         # Save extrinsic
-        pose = poses[i]
+        pose = poses[i] @ OPENGL  # Transformed to OPENGL format
         R = pose[:3, :3]
         T = pose[:3, 3:4]
 
@@ -133,7 +135,7 @@ def _export_camera_infos(scene_dir: Path, imgs, focals, poses):
             json.dump(extr_obj, f, cls=NumpyEncoder, indent=2)
 
 
-def _export_pointscloud(scene_dir, pts3d, imgs, confs):
+def _export_pointscloud(scene_dir, pts3d, imgs, confs, masks):
     assert len(pts3d) == len(imgs) == len(confs), "data dimention mismatch!"
 
     pts3d_file = scene_dir / "conf_points3D.txt"
@@ -149,8 +151,14 @@ def _export_pointscloud(scene_dir, pts3d, imgs, confs):
                 img_col = np.uint8(255 * img_col)
 
             conf = confs[i]  # HxW
+            msk = masks[i]  # HxW
             pts_cols = np.concatenate(
-                (img_pts.reshape(-1, 3), img_col.reshape(-1, 3), conf.reshape(-1, 1)),
+                (
+                    img_pts.reshape(-1, 3),
+                    img_col.reshape(-1, 3),
+                    conf.reshape(-1, 1),
+                    msk.reshape(-1, 1),
+                ),
                 axis=-1,
             )
             # Join the strings within each row
