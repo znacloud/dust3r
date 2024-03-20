@@ -52,7 +52,7 @@ def export_optimized_scene(outdir, imgs, pts3d, confs, masks, focals, cams2world
     focals = to_numpy(focals)
     cams2world = to_numpy(cams2world)
 
-    scene_dir = Path(outdir) / "DUSt3R_Scene"
+    scene_dir = Path(outdir)
     scene_dir.mkdir(parents=True, exist_ok=True)
 
     # >>> pts3d.shape=(4, 512, 288, 3), imgs.shape=(4, 512, 288, 3)
