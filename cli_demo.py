@@ -48,6 +48,23 @@ def get_args_parser():
     parser.add_argument(
         "--out_dir", type=str, default=None, help="value for generated results file dir"
     )
+    parser.add_argument(
+        "--iterations", type=int, default=300, help="iterations for global optimizer"
+    )
+    # scenegraph_type
+    # winsize, refid
+
+    parser.add_argument(
+        "--scenegraph_type", type=str, default="complete", choices=["complete", "swin", "oneref"], 
+        help="scenegraph_type for global optimizer"
+    )
+    parser.add_argument(
+        "--winsize", type=int, default=1, help="window size for global optimizer when scene type = swin"
+    )
+
+    parser.add_argument(
+        "--refid", type=int, default=0, help="reference id  for global optimizer when scene type = oneref"
+    )
     return parser
 
 
@@ -173,7 +190,7 @@ def get_reconstructed_scene(outdir, model, device, image_size, filelist, schedul
     return scene, outfile, imgs
 
 
-def main_demo(tmpdirname, model, device, image_size, filelist):
+def main_demo(tmpdirname, model, device, image_size, filelist, iters, scene_type, winsize, refid):
     get_reconstructed_scene(
         tmpdirname,
         model,
@@ -181,16 +198,16 @@ def main_demo(tmpdirname, model, device, image_size, filelist):
         image_size,
         filelist,
         "linear",
-        300,
+        iters,
         3,
         True,
         False,
         True,
         False,
         0.05,
-        "complete",
-        1,
-        0,
+        scene_type,
+        winsize,
+        refid,
     )
 
 
@@ -210,7 +227,8 @@ if __name__ == "__main__":
 
     if save_path:
         print("Outputing stuff in", save_path)
-        main_demo(save_path, model, args.device, args.image_size, args.input_dir)
+        main_demo(save_path, model, args.device, args.image_size, args.input_dir, 
+                  args.iterations,args.scenegraph_type, args.winsize, args.refid)
     else:
         # dust3r will write the 3D model inside tmpdirname
         with tempfile.TemporaryDirectory(suffix="dust3r_gradio_demo") as tmpdirname:
